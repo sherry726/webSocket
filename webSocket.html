@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>webSocket封装</title>
+</head>
+<body>
+    <script>
+        /* webSocket封装
+         * @param url: webSocket接口地址与携带参数（必填）
+         * @param onopen(): 连接成功后的回调函数
+         * @param onmessage(): 接收到服务器数据后的回调函数
+         * @param onclose(): 连接关闭后的回调函数
+         * @param onerror(): 连接发生错误后的回调函数
+         * @param heartMessage: 发送给后台的心跳包参数（必填），给服务器端的心跳包就是定期给服务器发送消息
+         * @param timer: 给后台传送心跳包的时间间隔，不传时使用默认值3000毫秒
+         * @param isReconnect: 连接断掉是否重新连接，传true为重新连接
+        */
+        function useWebSocket(url,onOpenFunc,onMessageFunc,onCloseFunc,onErrorFunc,heartMessage,timer,isReconnect){
+            let isConnected = false;    //设置已连接webSocket标识
+            let ws = null;    //定义webSocket对象
+            //创建并连接webSocket
+            let connect = function(){
+                if(!isConnected){
+                    //若未连接webSocket，则创建一个新的webSocket
+                    console.log(url);
+                    ws = new WebSocket(url);
+                    isConnected = true;
+                }
+            }
+            //向后台发送心跳消息
+            let heartCheck = function(){
+                ws.send(JSON.stringify(heartMessage));
+            }
+            //初始化事件回调函数
+            let initEventHandle = function(){
+                console.log('已连接');
+                ws.addEventListener('open',function(event){
+                    //给后台发心跳请求
+                    heartCheck();
+                    //若传入函数，执行onOpenFunc
+                    if(!onOpenFunc){
+                        return false;
+                    }else{
+                        onOpenFunc(event);
+                    }
+                })
+                ws.addEventListener('message',function(event){
+                    //接收到任何后台的消息都说明当前连接是正常的
+                    if(!event){
+                        return false;  
+                    }else{
+                        //若获取到后台消息，则timer毫秒后再次发起心跳请求给后台，检测是否断开连接
+                        setTimeout(()=>{
+                            heartCheck();    //给后台发心跳请求
+                        },!timer ? 3000 : timer)
+                    }
+                    //若传入了函数，执行onMessageFunc
+                    if(!onMessageFunc){
+                        return false;
+                    }else{
+                        onMessageFunc(event);
+                    }
+                })
+                ws.addEventListener('close',function(event){
+                    //若传入函数，执行onCloseFunc
+                    if(!onCloseFunc){
+                        return false;
+                    }else{
+                        onCloseFunc(event);
+                    }
+                    if(isReconnect){    //若断开立即重新连接标志为true
+                        connect();  //重新连接webSocket
+                    }
+                })
+                ws.addEventListener('error',function(event){
+                    //若传入函数，执行onErrorFunc
+                      if(!onErrorFunc){
+                        return false;
+                    }else{
+                        onErrorFunc(event);
+                    }
+                    if(isReconnect){    //若断开立即重新连接标志为true
+                        connect();  //重新连接webSocket
+                    }
+                })
+            }
+            window.onload = function(){
+                //初始化webSocket
+                (function(){
+                    //1.创建并连接webSocket
+                    connect();
+                    //2.初始化事件回调函数
+                    initEventHandle();
+                    //3.返回是否已连接
+                    return ws;
+                })()
+            }
+        }
+        useWebSocket("ws://10.170.6.45:8888/websocket/23",   //服务器url
+                    null,   //onopen的回调函数   
+                    function(event){
+                        let res = event.data;    //后端返回的数据，onmessage的回调函数
+                        console.log(res);
+                    },
+                    null,   //onclose的回调函数  
+                    null,   //onerror的回调函数  
+                    {       //心跳包消息
+                        "action":"66",
+                        "eventType":"88",
+                        "requestId":"123"
+                    },
+                    null,   //传送心跳包的间隔时间
+                    true     //true表示连接断开立即重新连接    
+        )
+    </script>
+</body>
+</html>
